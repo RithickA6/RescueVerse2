@@ -26,3 +26,12 @@ Workflow:
 - Wait for approval before starting the next milestone.
 - Prefer reusable systems over scene-specific code.
 - Use placeholders only when required because assets are missing.
+
+## Development Process
+
+- Make one logical change at a time.
+- Verify the project builds after each logical change.
+- If the build fails, fix the issue before continuing.
+- Never continue while the project is in a broken state.
+- Prefer small, reviewable commits over large rewrites.
+- Explain all modified files before considering the task complete.
