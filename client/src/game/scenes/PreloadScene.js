@@ -193,14 +193,34 @@ export default class PreloadScene extends Phaser.Scene {
    * Fallback: Procedural NPC textures (state-based).
    */
   _loadNPCAssets() {
-    // Try to load external NPC spritesheet
-    // When /npc.png is provided, it will be loaded here. For now, use procedural.
+    const basePath = '/assets/npc/';
+    const packs = ['City_men_2', 'City_men_3'];
+    const actions = ['Idle', 'Walk', 'Run', 'Hurt', 'Attack', 'Dead'];
+
     try {
-      if (!this.textures.exists('npc')) {
-        this._createNPCFallback();
-      }
+      packs.forEach(pack => {
+        actions.forEach(action => {
+          const key = `${pack.toLowerCase().replace(/\s+/g, '_')}_${action.toLowerCase()}`;
+          this.load.spritesheet(key, `${basePath}${pack}/${action}.png`, { frameWidth: 128, frameHeight: 128 });
+        });
+      });
+
+      return new Promise(resolve => {
+        const onComplete = () => {
+          this.load.off('complete', onComplete);
+          this.load.off('loaderror', onError);
+          resolve();
+        };
+        const onError = (file) => {
+          console.warn('Failed to load NPC asset:', file && file.key ? file.key : file);
+        };
+
+        this.load.once('complete', onComplete);
+        this.load.on('loaderror', onError);
+        this.load.start();
+      });
     } catch (e) {
-      console.warn('NPC asset loading failed, using fallback:', e.message);
+      console.warn('NPC asset loading failed, using fallback:', e && e.message ? e.message : e);
       this._createNPCFallback();
     }
   }
@@ -300,12 +320,20 @@ export default class PreloadScene extends Phaser.Scene {
   // ── Animation registration ────────────────────────────────────────────────────────
   _registerAnimations() {
     const animMgr = new AnimationManager(this);
-    // Only register player animations for now (NPCs still use state-based sprites)
-    if (this.anims.exists('player_idle')) return;
-    try {
-      animMgr.registerPlayerAnimations();
-    } catch (e) {
-      console.warn('Animation registration skipped (no spritesheet):', e.message);
+    if (!this.anims.exists('player_idle')) {
+      try {
+        animMgr.registerPlayerAnimations();
+      } catch (e) {
+        console.warn('Player animation registration skipped:', e.message);
+      }
+    }
+
+    if (!this.anims.exists('npc_idle')) {
+      try {
+        animMgr.registerNPCAnimations();
+      } catch (e) {
+        console.warn('NPC animation registration skipped:', e.message);
+      }
     }
   }
 

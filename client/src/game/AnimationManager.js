@@ -71,35 +71,48 @@ export default class AnimationManager {
 
   /**
    * Register all NPC animations.
-   * Assumes 'npc' spritesheet is loaded.
+   * Loads animations from available NPC packs and also registers generic keys.
    */
   registerNPCAnimations() {
-    // Idle — frames 0-2
-    this.registerAnimation('npc_idle_anim', {
-      frames: this.scene.anims.generateFrameNumbers('npc', { start: 0, end: 2 }),
-      frameRate: 6,
-      repeat: -1,
-    });
+    const packs = [
+      { name: 'City_men_2', prefix: 'city_men_2' },
+      { name: 'City_men_3', prefix: 'city_men_3' },
+    ];
 
-    // Walk — frames 3-6
-    this.registerAnimation('npc_walk_anim', {
-      frames: this.scene.anims.generateFrameNumbers('npc', { start: 3, end: 6 }),
-      frameRate: 10,
-      repeat: -1,
-    });
+    const actions = [
+      { sheet: 'idle',   anim: 'npc_idle',   frameRate: 6,  repeat: -1 },
+      { sheet: 'walk',   anim: 'npc_walk',   frameRate: 10, repeat: -1 },
+      { sheet: 'run',    anim: 'npc_run',    frameRate: 14, repeat: -1 },
+      { sheet: 'hurt',   anim: 'npc_hurt',   frameRate: 8,  repeat: 0  },
+      { sheet: 'dead',   anim: 'npc_dead',   frameRate: 6,  repeat: 0  },
+      { sheet: 'attack', anim: 'npc_attack', frameRate: 12, repeat: 0  },
+    ];
 
-    // Panic — frames 7-9
-    this.registerAnimation('npc_panic_anim', {
-      frames: this.scene.anims.generateFrameNumbers('npc', { start: 7, end: 9 }),
-      frameRate: 12,
-      repeat: -1,
-    });
+    const genericCreated = new Set();
+    packs.forEach(pack => {
+      actions.forEach(({ sheet, anim, frameRate, repeat }) => {
+        const textureKey = `${pack.prefix}_${sheet}`;
+        if (!this.scene.textures.exists(textureKey)) return;
 
-    // Hurt — frames 10-11
-    this.registerAnimation('npc_hurt_anim', {
-      frames: this.scene.anims.generateFrameNumbers('npc', { start: 10, end: 11 }),
-      frameRate: 8,
-      repeat: 0,
+        const count = this._getFrameCount(textureKey);
+        if (count <= 0) return;
+
+        const variantAnim = `${anim}_${pack.prefix}`;
+        this.registerAnimation(variantAnim, {
+          frames: this.scene.anims.generateFrameNumbers(textureKey, { start: 0, end: Math.max(0, count - 1) }),
+          frameRate,
+          repeat,
+        });
+
+        if (!genericCreated.has(anim)) {
+          this.registerAnimation(anim, {
+            frames: this.scene.anims.generateFrameNumbers(textureKey, { start: 0, end: Math.max(0, count - 1) }),
+            frameRate,
+            repeat,
+          });
+          genericCreated.add(anim);
+        }
+      });
     });
   }
 

@@ -180,12 +180,14 @@ export default class EarthquakeScene extends Phaser.Scene {
     this.player.body.setOffset(bodyOffsetX, bodyOffsetY);
 
     // Add label
-    this.playerLabel = this.add.text(this.playerPos.x, this.playerPos.y - Math.round(this.player.displayHeight) - 8, 'YOU', {
+    this.playerLabel = this.add.text(this.playerPos.x, 0, 'YOU', {
       fontFamily: 'Share Tech Mono, monospace',
       fontSize:   '9px',
       color:      '#58a6ff',
       align:      'center',
     }).setOrigin(0.5).setDepth(11);
+
+    this._positionPlayerLabel();
 
     // Initialize animation manager and register animations
     this.animMgr = new AnimationManager(this);
@@ -204,10 +206,15 @@ export default class EarthquakeScene extends Phaser.Scene {
     this._updatePlayerVisuals();
   }
 
+  _positionPlayerLabel() {
+    const spriteTop = this.player.y - Math.round(this.player.displayHeight * this.player.originY);
+    this.playerLabel.setPosition(this.player.x, spriteTop - 12);
+  }
+
   _updatePlayerVisuals() {
     // Update player sprite position
     this.player.setPosition(this.playerPos.x, this.playerPos.y);
-    this.playerLabel.setPosition(this.playerPos.x, this.playerPos.y - Math.round(this.player.displayHeight) - 8);
+    this._positionPlayerLabel();
 
     // Visual feedback for cover state
     if (this.isCovered) {
@@ -520,7 +527,7 @@ export default class EarthquakeScene extends Phaser.Scene {
       this.playerPos.x = Phaser.Math.Clamp(this.playerPos.x + dx, 20, W - 20);
       this.playerPos.y = Phaser.Math.Clamp(this.playerPos.y + dy, 20, H - 20);
       this.player.setPosition(this.playerPos.x, this.playerPos.y);
-      this.playerLabel.setPosition(this.playerPos.x, this.playerPos.y - Math.round(this.player.displayHeight) - 8);
+      this._positionPlayerLabel();
 
       if (this.animMgr.has('player_walk')) {
         if (this.playerState !== 'walk') {
