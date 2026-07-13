@@ -47,6 +47,13 @@ export default function GameEngine({ scenario, onSimulationEnd }) {
       parent:          mountRef.current,
       backgroundColor: '#1a1f2e',
       scene:           [PreloadScene, EarthquakeScene, FloodScene],
+      physics: {
+        default: 'arcade',
+        arcade: {
+          gravity: { y: 0 },
+          debug: false,
+        },
+      },
     });
     gameRef.current = game;
 

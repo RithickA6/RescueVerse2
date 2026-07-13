@@ -144,13 +144,43 @@ export default class EarthquakeScene extends Phaser.Scene {
   _spawnPlayer() {
     this.playerPos   = new Phaser.Math.Vector2(W / 2, H / 2);
     
-    // Create player sprite (loaded in PreloadScene)
-    this.player = this.add.sprite(this.playerPos.x, this.playerPos.y, 'player');
+    // Choose a player texture: prefer per-action spritesheet 'player_idle', fall back to 'player'
+    let spriteKey = null;
+    if (this.textures && this.textures.exists && this.textures.exists('player_idle')) {
+      spriteKey = 'player_idle';
+    } else if (this.textures && this.textures.exists && this.textures.exists('player')) {
+      spriteKey = 'player';
+    }
+
+    // If no texture exists yet, create a small procedural fallback texture named 'player'
+    if (!spriteKey) {
+      const g = this.make.graphics({ add: false });
+      g.fillStyle(0x58a6ff, 1);
+      g.fillCircle(16, 18, 11);
+      g.fillStyle(0x9ecfff, 1);
+      g.fillCircle(16, 7, 6);
+      g.fillStyle(0xffffff, 0.4);
+      g.fillCircle(16, 0, 3);
+      g.generateTexture('player', 32, 32);
+      g.destroy();
+      spriteKey = 'player';
+    }
+
+    this.player = this.physics.add.sprite(this.playerPos.x, this.playerPos.y, spriteKey);
+    this.player.setOrigin(0.5, 0.95);
+    this.player.setScale(0.82);
     this.player.setDepth(10);
-    this.player.setScale(1);
-    
+
+    // Align physics body to the character's lower-body region for natural standing/collision alignment
+    const bodyWidth = 40;
+    const bodyHeight = 68;
+    const bodyOffsetX = Math.round((this.player.displayWidth - bodyWidth) * 0.5);
+    const bodyOffsetY = Math.round(this.player.displayHeight * 0.95 - bodyHeight);
+    this.player.body.setSize(bodyWidth, bodyHeight);
+    this.player.body.setOffset(bodyOffsetX, bodyOffsetY);
+
     // Add label
-    this.playerLabel = this.add.text(this.playerPos.x, this.playerPos.y - 24, 'YOU', {
+    this.playerLabel = this.add.text(this.playerPos.x, this.playerPos.y - Math.round(this.player.displayHeight) - 8, 'YOU', {
       fontFamily: 'Share Tech Mono, monospace',
       fontSize:   '9px',
       color:      '#58a6ff',
@@ -169,6 +199,7 @@ export default class EarthquakeScene extends Phaser.Scene {
     if (this.animMgr.has('player_idle')) {
       this.player.play('player_idle');
     }
+    this.playerState = 'idle';
 
     this._updatePlayerVisuals();
   }
@@ -176,7 +207,7 @@ export default class EarthquakeScene extends Phaser.Scene {
   _updatePlayerVisuals() {
     // Update player sprite position
     this.player.setPosition(this.playerPos.x, this.playerPos.y);
-    this.playerLabel.setPosition(this.playerPos.x, this.playerPos.y - 24);
+    this.playerLabel.setPosition(this.playerPos.x, this.playerPos.y - Math.round(this.player.displayHeight) - 8);
 
     // Visual feedback for cover state
     if (this.isCovered) {
@@ -351,7 +382,22 @@ export default class EarthquakeScene extends Phaser.Scene {
           this._addScore(SCORE.DEBRIS_HIT);
           this._msg(`DEBRIS HIT! −${dmg} HP`, '#f85149');
           this.cameras.main.shake(180, 0.011);
-          if (this.health <= 0) this._endSim(false);
+            // Play hurt animation if available
+            try {
+              if (this.animMgr && this.animMgr.has && this.animMgr.has('player_hurt')) {
+                this.player.play('player_hurt');
+              }
+            } catch (e) { /* ignore */ }
+
+            // If health reached zero, play death animation if available then end simulation
+            if (this.health <= 0) {
+              try {
+                if (this.animMgr && this.animMgr.has && this.animMgr.has('player_death')) {
+                  this.player.play('player_death');
+                }
+              } catch (e) { /* ignore */ }
+              this._endSim(false);
+            }
         }
       }
 
@@ -466,24 +512,35 @@ export default class EarthquakeScene extends Phaser.Scene {
     if (a.isDown || left.isDown)  dx = -speed;
     if (d.isDown || right.isDown) dx =  speed;
 
-    if (dx !== 0 || dy !== 0) {
-      if (this.isCovered) { 
-        this.isCovered = false; 
-        this._updatePlayerVisuals(); 
-      }
+    const isMoving = dx !== 0 || dy !== 0;
+    const movementDisabled = this.phase === PHASE.END || this.playerSpeed <= 0;
+    const shouldIdle = this.isCovered || !isMoving || movementDisabled;
+
+    if (isMoving && !this.isCovered && !movementDisabled) {
       this.playerPos.x = Phaser.Math.Clamp(this.playerPos.x + dx, 20, W - 20);
       this.playerPos.y = Phaser.Math.Clamp(this.playerPos.y + dy, 20, H - 20);
       this.player.setPosition(this.playerPos.x, this.playerPos.y);
-      this.playerLabel.setPosition(this.playerPos.x, this.playerPos.y - 24);
+      this.playerLabel.setPosition(this.playerPos.x, this.playerPos.y - Math.round(this.player.displayHeight) - 8);
 
-      // Play walk animation if available
       if (this.animMgr.has('player_walk')) {
-        this.player.play('player_walk', true);
+        if (this.playerState !== 'walk') {
+          this.player.play('player_walk', true);
+          this.playerState = 'walk';
+        }
       }
     } else {
-      // Play idle animation if available
-      if (this.animMgr.has('player_idle') && !this.player.anims.isPlaying) {
-        this.player.play('player_idle', true);
+      if (this.isCovered && this.playerState !== 'idle') {
+        if (this.animMgr.has('player_idle')) {
+          this.player.play('player_idle', true);
+        }
+        this.playerState = 'idle';
+      }
+
+      if (!isMoving && this.playerState !== 'idle') {
+        if (this.animMgr.has('player_idle')) {
+          this.player.play('player_idle', true);
+        }
+        this.playerState = 'idle';
       }
     }
 

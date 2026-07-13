@@ -37,40 +37,36 @@ export default class AnimationManager {
    * Assumes 'player' spritesheet is loaded.
    */
   registerPlayerAnimations() {
-    // Idle — frames 0-3
-    this.registerAnimation('player_idle', {
-      frames: this.scene.anims.generateFrameNumbers('player', { start: 0, end: 3 }),
-      frameRate: 8,
-      repeat: -1,
-    });
+    // Register animations from per-action spritesheets if present.
+    // Each spritesheet is expected to contain only the frames for that action.
+    const registerFromSheet = (sheetKey, animKey, frameRate = 10, repeat = -1) => {
+      if (!this.scene.textures.exists(sheetKey)) return false;
+      const count = this._getFrameCount(sheetKey);
+      if (count <= 0) return false;
+      this.registerAnimation(animKey, {
+        frames: this.scene.anims.generateFrameNumbers(sheetKey, { start: 0, end: Math.max(0, count - 1) }),
+        frameRate,
+        repeat,
+      });
+      return true;
+    };
 
-    // Walk — frames 4-7
-    this.registerAnimation('player_walk', {
-      frames: this.scene.anims.generateFrameNumbers('player', { start: 4, end: 7 }),
-      frameRate: 10,
-      repeat: -1,
-    });
+    registerFromSheet('player_idle',   'player_idle',   8,  -1);
+    registerFromSheet('player_walk',   'player_walk',  10,  -1);
+    registerFromSheet('player_run',    'player_run',   14,  -1);
+    registerFromSheet('player_hurt',   'player_hurt',   8,   0);
+    registerFromSheet('player_attack', 'player_attack',10,   0);
+    registerFromSheet('player_dead',   'player_death',  6,   0);
+  }
 
-    // Run — frames 8-11
-    this.registerAnimation('player_run', {
-      frames: this.scene.anims.generateFrameNumbers('player', { start: 8, end: 11 }),
-      frameRate: 14,
-      repeat: -1,
-    });
-
-    // Hurt — frames 12-14
-    this.registerAnimation('player_hurt', {
-      frames: this.scene.anims.generateFrameNumbers('player', { start: 12, end: 14 }),
-      frameRate: 8,
-      repeat: 0,
-    });
-
-    // Death — frames 15-17
-    this.registerAnimation('player_death', {
-      frames: this.scene.anims.generateFrameNumbers('player', { start: 15, end: 17 }),
-      frameRate: 6,
-      repeat: 0,
-    });
+  _getFrameCount(key) {
+    try {
+      const tex = this.scene.textures.get(key);
+      if (!tex || !tex.frames) return 0;
+      return Object.keys(tex.frames).filter(n => n !== '__BASE').length;
+    } catch (e) {
+      return 0;
+    }
   }
 
   /**

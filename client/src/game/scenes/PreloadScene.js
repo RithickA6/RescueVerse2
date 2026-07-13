@@ -97,7 +97,17 @@ export default class PreloadScene extends Phaser.Scene {
       this.barFg.fillRect(this.barX, this.barY, this.barW * ((step + 1) / steps.length), this.barH);
 
       try {
-        s.fn();
+        const result = s.fn();
+        // If the step returns a promise (async loader), wait for it to finish before continuing
+        if (result && typeof result.then === 'function') {
+          result
+            .catch(e => console.warn(`Asset loading step failed (${s.label}):`, e && e.message ? e.message : e))
+            .finally(() => {
+              step++;
+              this.time.delayedCall(180, tick);
+            });
+          return;
+        }
       } catch (e) {
         console.warn(`Asset loading step failed (${s.label}):`, e.message);
       }
@@ -116,16 +126,50 @@ export default class PreloadScene extends Phaser.Scene {
    * Fallback: Procedural player texture.
    */
   _loadCharacterAssets() {
-    // Try to load external player spritesheet
-    // When /player.png is provided with 16 frames (idle, walk, run, hurt, death)
-    // it will be loaded here. For now, create a fallback procedural texture.
+    // Load per-action player spritesheets (Option 1 from Asset Report)
+    // Files available under public/assets/player/City_men_1/:
+    // Idle.png, Walk.png, Run.png, Hurt.png, Attack.png, Dead.png
+    // Each spritesheet frame size: 128x128
+    const basePath = '/assets/player/City_men_1/';
+    const sheets = [
+      { key: 'player_idle',   file: 'Idle.png'   },
+      { key: 'player_walk',   file: 'Walk.png'   },
+      { key: 'player_run',    file: 'Run.png'    },
+      { key: 'player_hurt',   file: 'Hurt.png'   },
+      { key: 'player_attack', file: 'Attack.png' },
+      { key: 'player_dead',   file: 'Dead.png'   },
+    ];
+
+    // If Phaser's loader is available, queue the spritesheets and return a Promise
     try {
-      if (!this.textures.exists('player')) {
-        this._createPlayerFallback();
+      const load = this.load;
+      let queued = 0;
+      sheets.forEach(s => {
+        // Always queue; missing files will cause a loader error which we catch below
+        load.spritesheet(s.key, basePath + s.file, { frameWidth: 128, frameHeight: 128 });
+        queued++;
+      });
+
+      if (queued > 0) {
+        return new Promise(resolve => {
+          const onComplete = () => {
+            load.off('complete', onComplete);
+            load.off('loaderror', onError);
+            resolve();
+          };
+          const onError = (file) => {
+            // Log but continue — animation registration will skip missing keys
+            console.warn('Failed to load asset:', file && file.key ? file.key : file);
+          };
+
+          load.once('complete', onComplete);
+          load.on('loaderror', onError);
+          load.start();
+        });
       }
     } catch (e) {
-      console.warn('Character asset loading failed, using fallback:', e.message);
-      this._createPlayerFallback();
+      console.warn('Character asset loading failed, using fallback:', e && e.message ? e.message : e);
+      if (!this.textures.exists('player')) this._createPlayerFallback();
     }
   }
 
