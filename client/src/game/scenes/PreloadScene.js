@@ -1,9 +1,11 @@
 /**
  * PreloadScene.js
- * Procedurally generates all textures Phaser needs before the simulation starts.
- * No external asset files required.
+ * Scalable asset pipeline for RescueVerse.
+ * Loads textures, sprites, and animations organized by category.
+ * Falls back to procedural generation if external assets are unavailable.
  */
 import Phaser from 'phaser';
+import AnimationManager from '../AnimationManager';
 
 export default class PreloadScene extends Phaser.Scene {
   constructor() {
@@ -14,17 +16,31 @@ export default class PreloadScene extends Phaser.Scene {
     const W = this.scale.width;
     const H = this.scale.height;
 
-    // ── Background ─────────────────────────────────────────────────────────────
+    this._setupDisplay(W, H);
+
+    // ── Asset loading steps ────────────────────────────────────────────────────────
+    const steps = [
+      { label: 'LOADING CHARACTER ASSETS…',  fn: () => this._loadCharacterAssets()  },
+      { label: 'LOADING NPC ASSETS…',        fn: () => this._loadNPCAssets()        },
+      { label: 'LOADING ENVIRONMENT…',       fn: () => this._loadEnvironmentAssets() },
+      { label: 'LOADING HAZARD ASSETS…',     fn: () => this._loadHazardAssets()     },
+      { label: 'REGISTERING ANIMATIONS…',    fn: () => this._registerAnimations()   },
+      { label: 'LOADING SCENARIO DATA…',     fn: () => {}                           },
+    ];
+
+    this._executeLoadingSteps(steps, W, H);
+  }
+
+  // ── Setup UI ─────────────────────────────────────────────────────────────────────
+  _setupDisplay(W, H) {
     const bg = this.add.graphics();
     bg.fillStyle(0x0a0c0f, 1);
     bg.fillRect(0, 0, W, H);
 
-    // Scanlines
     const scanlines = this.add.graphics();
     scanlines.lineStyle(1, 0x1a1f2e, 0.4);
     for (let y = 0; y < H; y += 3) scanlines.lineBetween(0, y, W, y);
 
-    // ── Logo ───────────────────────────────────────────────────────────────────
     this.add.text(W / 2, H / 2 - 60, 'DRTS', {
       fontFamily: 'Bebas Neue, sans-serif',
       fontSize:   '72px',
@@ -38,7 +54,7 @@ export default class PreloadScene extends Phaser.Scene {
       letterSpacing: 4,
     }).setOrigin(0.5);
 
-    // ── Progress bar ───────────────────────────────────────────────────────────
+    // Progress bar
     const barW = 300, barH = 3;
     const barX = W / 2 - barW / 2;
     const barY = H / 2 + 60;
@@ -47,25 +63,23 @@ export default class PreloadScene extends Phaser.Scene {
     barBg.fillStyle(0x21262d, 1);
     barBg.fillRect(barX, barY, barW, barH);
 
-    const barFg = this.add.graphics();
-    barFg.fillStyle(0xf85149, 1);
+    this.barFg = this.add.graphics();
+    this.barFg.fillStyle(0xf85149, 1);
 
-    const statusText = this.add.text(W / 2, barY + 16, 'INITIALISING…', {
+    this.statusText = this.add.text(W / 2, barY + 16, 'INITIALISING…', {
       fontFamily: 'Share Tech Mono, monospace',
       fontSize:   '10px',
       color:      '#7d8590',
     }).setOrigin(0.5);
 
-    // ── Procedural texture generation ──────────────────────────────────────────
-    const steps = [
-      { label: 'GENERATING FLOOR TILES…',    fn: () => this._genFloor()     },
-      { label: 'BUILDING WALL TEXTURES…',    fn: () => this._genWalls()     },
-      { label: 'SPAWNING NPC SPRITES…',      fn: () => this._genNPCSprites() },
-      { label: 'GENERATING DEBRIS ATLAS…',   fn: () => this._genDebris()    },
-      { label: 'CALIBRATING HAZARD ZONES…',  fn: () => this._genHazards()   },
-      { label: 'LOADING SCENARIO DATA…',     fn: () => {}                   },
-    ];
+    this.barX = barX;
+    this.barY = barY;
+    this.barW = barW;
+    this.barH = barH;
+  }
 
+  // ── Loading steps executor ─────────────────────────────────────────────────────────
+  _executeLoadingSteps(steps, W, H) {
     let step = 0;
     const tick = () => {
       if (step >= steps.length) {
@@ -77,11 +91,17 @@ export default class PreloadScene extends Phaser.Scene {
       }
 
       const s = steps[step];
-      statusText.setText(s.label);
-      barFg.clear();
-      barFg.fillStyle(0xf85149, 1);
-      barFg.fillRect(barX, barY, barW * ((step + 1) / steps.length), barH);
-      try { s.fn(); } catch (e) { console.warn('Preload step skipped:', e.message); }
+      this.statusText.setText(s.label);
+      this.barFg.clear();
+      this.barFg.fillStyle(0xf85149, 1);
+      this.barFg.fillRect(this.barX, this.barY, this.barW * ((step + 1) / steps.length), this.barH);
+
+      try {
+        s.fn();
+      } catch (e) {
+        console.warn(`Asset loading step failed (${s.label}):`, e.message);
+      }
+
       step++;
       this.time.delayedCall(180, tick);
     };
@@ -89,36 +109,60 @@ export default class PreloadScene extends Phaser.Scene {
     this.time.delayedCall(100, tick);
   }
 
-  _createTexture(key, width, height, drawFn) {
+  // ── Asset loading: Characters ──────────────────────────────────────────────────────
+  /**
+   * Load player character sprite.
+   * Expected: 'player' spritesheet at /player.png (4x4 grid — 16 frames)
+   * Fallback: Procedural player texture.
+   */
+  _loadCharacterAssets() {
+    // Try to load external player spritesheet
+    // When /player.png is provided with 16 frames (idle, walk, run, hurt, death)
+    // it will be loaded here. For now, create a fallback procedural texture.
+    try {
+      if (!this.textures.exists('player')) {
+        this._createPlayerFallback();
+      }
+    } catch (e) {
+      console.warn('Character asset loading failed, using fallback:', e.message);
+      this._createPlayerFallback();
+    }
+  }
+
+  _createPlayerFallback() {
+    // Create a simple player sprite sheet simulation (1x1 frame fallback)
     const g = this.make.graphics({ add: false });
-    drawFn(g);
-    g.generateTexture(key, width, height);
+    g.fillStyle(0x58a6ff, 1);
+    g.fillCircle(16, 18, 11);
+    g.fillStyle(0x9ecfff, 1);
+    g.fillCircle(16, 7, 6);
+    g.fillStyle(0xffffff, 0.4);
+    g.fillCircle(16, 0, 3);
+    g.generateTexture('player', 32, 32);
     g.destroy();
   }
 
-  _genFloor() {
-    this._createTexture('floor_tile', 32, 32, g => {
-      g.fillStyle(0x1a1f2e, 1);
-      g.fillRect(0, 0, 32, 32);
-      g.lineStyle(1, 0x252b3b, 0.6);
-      g.strokeRect(0, 0, 32, 32);
-      g.fillStyle(0x202838, 1);
-      [[4,4],[24,12],[8,22],[28,26]].forEach(([x, y]) => g.fillRect(x, y, 2, 2));
-    });
+  // ── Asset loading: NPCs ────────────────────────────────────────────────────────────
+  /**
+   * Load NPC sprite.
+   * Expected: 'npc' spritesheet at /npc.png with state variations.
+   * Fallback: Procedural NPC textures (state-based).
+   */
+  _loadNPCAssets() {
+    // Try to load external NPC spritesheet
+    // When /npc.png is provided, it will be loaded here. For now, use procedural.
+    try {
+      if (!this.textures.exists('npc')) {
+        this._createNPCFallback();
+      }
+    } catch (e) {
+      console.warn('NPC asset loading failed, using fallback:', e.message);
+      this._createNPCFallback();
+    }
   }
 
-  _genWalls() {
-    this._createTexture('wall_tile', 32, 32, g => {
-      g.fillStyle(0x0d1117, 1);
-      g.fillRect(0, 0, 32, 32);
-      g.lineStyle(1, 0x21262d, 1);
-      g.strokeRect(0, 0, 32, 32);
-      g.fillStyle(0x161b22, 1);
-      g.fillRect(4, 4, 24, 24);
-    });
-  }
-
-  _genNPCSprites() {
+  _createNPCFallback() {
+    // Procedural NPC textures for state representation
     const configs = [
       { key: 'npc_idle',      color: 0xe6edf3 },
       { key: 'npc_injured',   color: 0xf85149 },
@@ -145,7 +189,41 @@ export default class PreloadScene extends Phaser.Scene {
     });
   }
 
-  _genDebris() {
+  // ── Asset loading: Environment ────────────────────────────────────────────────────
+  _loadEnvironmentAssets() {
+    this._loadFloorAssets();
+    this._loadWallAssets();
+  }
+
+  _loadFloorAssets() {
+    this._createTexture('floor_tile', 32, 32, g => {
+      g.fillStyle(0x1a1f2e, 1);
+      g.fillRect(0, 0, 32, 32);
+      g.lineStyle(1, 0x252b3b, 0.6);
+      g.strokeRect(0, 0, 32, 32);
+      g.fillStyle(0x202838, 1);
+      [[4,4],[24,12],[8,22],[28,26]].forEach(([x, y]) => g.fillRect(x, y, 2, 2));
+    });
+  }
+
+  _loadWallAssets() {
+    this._createTexture('wall_tile', 32, 32, g => {
+      g.fillStyle(0x0d1117, 1);
+      g.fillRect(0, 0, 32, 32);
+      g.lineStyle(1, 0x21262d, 1);
+      g.strokeRect(0, 0, 32, 32);
+      g.fillStyle(0x161b22, 1);
+      g.fillRect(4, 4, 24, 24);
+    });
+  }
+
+  // ── Asset loading: Hazards ────────────────────────────────────────────────────────
+  _loadHazardAssets() {
+    this._loadDebrisAssets();
+    this._loadWarningAssets();
+  }
+
+  _loadDebrisAssets() {
     const shapes = ['rect', 'chunk', 'slab'];
     shapes.forEach((shape, i) => {
       this._createTexture(`debris_${i}`, 32, 32, g => {
@@ -159,7 +237,7 @@ export default class PreloadScene extends Phaser.Scene {
     });
   }
 
-  _genHazards() {
+  _loadWarningAssets() {
     this._createTexture('hazard_warning', 32, 32, g => {
       g.lineStyle(2, 0xf85149, 1);
       g.strokeCircle(16, 16, 14);
@@ -173,5 +251,51 @@ export default class PreloadScene extends Phaser.Scene {
       g.lineStyle(2, 0x3fb950, 1);
       g.strokeRect(0, 0, 64, 48);
     });
+  }
+
+  // ── Animation registration ────────────────────────────────────────────────────────
+  _registerAnimations() {
+    const animMgr = new AnimationManager(this);
+    // Only register player animations for now (NPCs still use state-based sprites)
+    if (this.anims.exists('player_idle')) return;
+    try {
+      animMgr.registerPlayerAnimations();
+    } catch (e) {
+      console.warn('Animation registration skipped (no spritesheet):', e.message);
+    }
+  }
+
+  // ── Placeholder for UI assets ──────────────────────────────────────────────────────
+  /**
+   * Future: Load UI textures, buttons, icons, etc.
+   */
+  _loadUIAssets() {
+    // Placeholder for future UI asset loading
+  }
+
+  // ── Placeholder for audio assets ───────────────────────────────────────────────────
+  /**
+   * Future: Load sound effects, ambient audio, music tracks.
+   */
+  _loadAudioAssets() {
+    // Placeholder for future audio asset loading
+  }
+
+  // ── Placeholder for future scenario assets────────────────────────────────────────
+  /**
+   * Future: Load Flood, Fire, Cyclone specific assets.
+   */
+  _loadFutureScenarioAssets() {
+    // Placeholder for future scenario-specific asset loading
+  }
+
+  // ── Utility: Texture generation ────────────────────────────────────────────────────
+
+
+  _createTexture(key, width, height, drawFn) {
+    const g = this.make.graphics({ add: false });
+    drawFn(g);
+    g.generateTexture(key, width, height);
+    g.destroy();
   }
 }

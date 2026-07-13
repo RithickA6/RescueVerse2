@@ -14,6 +14,7 @@
 
 import Phaser from 'phaser';
 import NPCManager from '../NPCManager.js';
+import AnimationManager from '../AnimationManager.js';
 import { DIFFICULTY_CONFIG } from '../SceneConfig.js';
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -142,35 +143,48 @@ export default class EarthquakeScene extends Phaser.Scene {
   // ── Player ───────────────────────────────────────────────────────────────────
   _spawnPlayer() {
     this.playerPos   = new Phaser.Math.Vector2(W / 2, H / 2);
-    this.playerGfx   = this.add.graphics().setDepth(10);
-    this.playerLabel = this.add.text(W / 2, H / 2 - 24, 'YOU', {
+    
+    // Create player sprite (loaded in PreloadScene)
+    this.player = this.add.sprite(this.playerPos.x, this.playerPos.y, 'player');
+    this.player.setDepth(10);
+    this.player.setScale(1);
+    
+    // Add label
+    this.playerLabel = this.add.text(this.playerPos.x, this.playerPos.y - 24, 'YOU', {
       fontFamily: 'Share Tech Mono, monospace',
       fontSize:   '9px',
       color:      '#58a6ff',
       align:      'center',
     }).setOrigin(0.5).setDepth(11);
-    this._renderPlayer();
+
+    // Initialize animation manager and register animations
+    this.animMgr = new AnimationManager(this);
+    try {
+      this.animMgr.registerPlayerAnimations();
+    } catch (e) {
+      console.warn('Player animations unavailable (no spritesheet):', e.message);
+    }
+
+    // Start with idle animation if available
+    if (this.animMgr.has('player_idle')) {
+      this.player.play('player_idle');
+    }
+
+    this._updatePlayerVisuals();
   }
 
-  _renderPlayer() {
-    this.playerGfx.clear();
-    this.playerGfx.setPosition(this.playerPos.x, this.playerPos.y);
+  _updatePlayerVisuals() {
+    // Update player sprite position
+    this.player.setPosition(this.playerPos.x, this.playerPos.y);
+    this.playerLabel.setPosition(this.playerPos.x, this.playerPos.y - 24);
 
+    // Visual feedback for cover state
     if (this.isCovered) {
-      // Crouched under table — flat rectangle
-      this.playerGfx.fillStyle(0x0d2540, 1);
-      this.playerGfx.fillRect(-11, -5, 22, 11);
-      this.playerGfx.lineStyle(2, 0x58a6ff, 0.8);
-      this.playerGfx.strokeRect(-11, -5, 22, 11);
+      this.player.setAlpha(0.6);
+      this.player.setTint(0x2a3f5a);
     } else {
-      // Standing
-      this.playerGfx.fillStyle(0x58a6ff, 1);
-      this.playerGfx.fillCircle(0, 2, 11);
-      this.playerGfx.fillStyle(0x9ecfff, 1);
-      this.playerGfx.fillCircle(0, -8, 5);
-      // Direction indicator
-      this.playerGfx.fillStyle(0xffffff, 0.4);
-      this.playerGfx.fillCircle(0, -1, 3);
+      this.player.setAlpha(1);
+      this.player.clearTint();
     }
   }
 
@@ -200,13 +214,13 @@ export default class EarthquakeScene extends Phaser.Scene {
 
     if (!this.isCovered && nearCover) {
       this.isCovered = true;
-      this._renderPlayer();
+      this._updatePlayerVisuals();
       this._log('took_cover', null, SCORE.TAKE_COVER);
       this._addScore(SCORE.TAKE_COVER);
       this._msg('COVER TAKEN — debris risk reduced', '#3fb950');
     } else if (this.isCovered) {
       this.isCovered = false;
-      this._renderPlayer();
+      this._updatePlayerVisuals();
       this._msg('EXPOSED — find cover during shaking!', '#e3b341');
     } else {
       this._msg('NO COVER NEARBY — move to a desk first', '#e3b341');
@@ -453,11 +467,24 @@ export default class EarthquakeScene extends Phaser.Scene {
     if (d.isDown || right.isDown) dx =  speed;
 
     if (dx !== 0 || dy !== 0) {
-      if (this.isCovered) { this.isCovered = false; this._renderPlayer(); }
+      if (this.isCovered) { 
+        this.isCovered = false; 
+        this._updatePlayerVisuals(); 
+      }
       this.playerPos.x = Phaser.Math.Clamp(this.playerPos.x + dx, 20, W - 20);
       this.playerPos.y = Phaser.Math.Clamp(this.playerPos.y + dy, 20, H - 20);
-      this.playerGfx.setPosition(this.playerPos.x, this.playerPos.y);
+      this.player.setPosition(this.playerPos.x, this.playerPos.y);
       this.playerLabel.setPosition(this.playerPos.x, this.playerPos.y - 24);
+
+      // Play walk animation if available
+      if (this.animMgr.has('player_walk')) {
+        this.player.play('player_walk', true);
+      }
+    } else {
+      // Play idle animation if available
+      if (this.animMgr.has('player_idle') && !this.player.anims.isPlaying) {
+        this.player.play('player_idle', true);
+      }
     }
 
     // ── NPC update ─────────────────────────────────────────────────────────
