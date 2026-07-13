@@ -15,6 +15,7 @@
 import Phaser from "phaser";
 import NPCManager from "../NPCManager.js";
 import AnimationManager from "../AnimationManager.js";
+import EnvironmentManager from "../EnvironmentManager.js";
 import { DIFFICULTY_CONFIG } from "../SceneConfig.js";
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -87,78 +88,11 @@ export default class EarthquakeScene extends Phaser.Scene {
 
   // ── World ────────────────────────────────────────────────────────────────────
   _buildWorld() {
-    const g = this.add.graphics();
+    // Use modular environment manager for all rendering
+    this.envMgr = new EnvironmentManager(this);
+    this.coverZones = this.envMgr.buildEnvironment(W, H);
 
-    // Floor
-    g.fillStyle(0x1a1f2e, 1);
-    g.fillRect(0, 0, W, H);
-
-    // Grid lines
-    g.lineStyle(1, 0x252b3b, 0.45);
-    for (let x = 0; x < W; x += 32) g.lineBetween(x, 0, x, H);
-    for (let y = 0; y < H; y += 32) g.lineBetween(0, y, W, y);
-
-    // Walls
-    [
-      [0, 0, W, 16],
-      [0, H - 16, W, 16],
-      [0, 0, 16, H],
-      [W - 16, 0, 16, H],
-    ].forEach(([x, y, w, h]) => {
-      g.fillStyle(0x0d1117, 1);
-      g.fillRect(x, y, w, h);
-      g.lineStyle(1, 0x21262d, 1);
-      g.strokeRect(x, y, w, h);
-    });
-
-    // ── Tables / cover objects ─────────────────────────────────────────────────
-    this.coverZones = [];
-    const tables = [
-      { x: 90, y: 110 },
-      { x: 210, y: 110 },
-      { x: 390, y: 110 },
-      { x: 570, y: 110 },
-      { x: 90, y: 270 },
-      { x: 290, y: 270 },
-      { x: 490, y: 270 },
-      { x: 650, y: 200 },
-      { x: 150, y: 410 },
-      { x: 350, y: 410 },
-      { x: 540, y: 410 },
-      { x: 680, y: 380 },
-    ];
-    tables.forEach((t) => {
-      // Table surface
-      g.fillStyle(0x2a3546, 1);
-      g.fillRect(t.x, t.y, 76, 42);
-      g.lineStyle(1, 0x3d5368, 1);
-      g.strokeRect(t.x, t.y, 76, 42);
-      // Legs
-      g.fillStyle(0x1e2d3d, 1);
-      [
-        [t.x + 4, t.y + 4],
-        [t.x + 64, t.y + 4],
-        [t.x + 4, t.y + 30],
-        [t.x + 64, t.y + 30],
-      ].forEach(([lx, ly]) => {
-        g.fillRect(lx, ly, 7, 7);
-      });
-      // Cover hitbox is a little larger than table
-      this.coverZones.push(
-        new Phaser.Geom.Rectangle(t.x - 10, t.y - 10, 96, 62),
-      );
-    });
-
-    // ── Evacuation exit ────────────────────────────────────────────────────────
-    this.exitZone = new Phaser.Geom.Rectangle(W - 104, H - 64, 88, 48);
-    g.lineStyle(2, 0x3fb950, 0.4);
-    g.strokeRect(
-      this.exitZone.x,
-      this.exitZone.y,
-      this.exitZone.width,
-      this.exitZone.height,
-    );
-
+    // Add exit label on top of environment layers
     this.exitLabel = this.add
       .text(this.exitZone.x + 4, this.exitZone.y + 14, "EXIT", {
         fontFamily: "Bebas Neue, sans-serif",
@@ -166,14 +100,16 @@ export default class EarthquakeScene extends Phaser.Scene {
         color: "#3fb950",
         alpha: 0.5,
       })
-      .setDepth(4);
+      .setDepth(5);
 
     // ── Visual FX layers ──────────────────────────────────────────────────────
-    this.crackGfx = this.add.graphics().setDepth(3).setVisible(false);
+    // Cracks appear on top of environment but below characters
+    this.crackGfx = this.add.graphics().setDepth(6).setVisible(false);
+    // Shake overlay for visual feedback
     this.shakeOverlay = this.add
       .rectangle(0, 0, W, H, 0xf85149, 0)
       .setOrigin(0)
-      .setDepth(5);
+      .setDepth(7);
   }
 
   // ── Player ───────────────────────────────────────────────────────────────────
