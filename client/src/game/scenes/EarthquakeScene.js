@@ -51,6 +51,7 @@ export default class EarthquakeScene extends Phaser.Scene {
     this.penaltyAccum = 0;
     this.cfg = DIFFICULTY_CONFIG.beginner;
     this.DURATIONS = {};
+    this.dustEmitter = null;
   }
 
   // ── Create ───────────────────────────────────────────────────────────────────
@@ -77,6 +78,7 @@ export default class EarthquakeScene extends Phaser.Scene {
 
     this._buildHUD();
     this._setupInput();
+    this._initializeParticleEffects();
     this._startPhase(PHASE.CALM);
 
     // Expose scene to React polling
@@ -439,12 +441,22 @@ export default class EarthquakeScene extends Phaser.Scene {
     const cx = Phaser.Math.Between(36, W - 36);
     const cy = Phaser.Math.Between(36, H - 36);
 
-    // Warning shadow
+    // Warning shadow with pulsing effect
     const warn = this.add.graphics().setDepth(6);
     warn.fillStyle(0xf85149, 0.18);
     warn.fillCircle(cx, cy, 20);
-    warn.lineStyle(1, 0xf85149, 0.6);
+    warn.lineStyle(2, 0xf85149, 0.8);
     warn.strokeCircle(cx, cy, 20);
+
+    // Pulse warning effect
+    this.tweens.add({
+      targets: warn,
+      scaleX: 1.3,
+      scaleY: 1.3,
+      alpha: 0,
+      duration: 500,
+      ease: "Quad.easeOut",
+    });
 
     this.time.delayedCall(750, () => {
       warn.destroy();
@@ -454,11 +466,14 @@ export default class EarthquakeScene extends Phaser.Scene {
       const shape = Phaser.Math.Between(0, 2);
 
       d.fillStyle(0x484f58, 1);
-      d.lineStyle(1, 0x30363d, 1);
+      d.lineStyle(2, 0x30363d, 1);
 
       if (shape === 0) {
         d.fillRect(cx - size / 2, cy - size / 3, size, size * 0.65);
         d.strokeRect(cx - size / 2, cy - size / 3, size, size * 0.65);
+        // Add inner highlight
+        d.fillStyle(0x666c74, 0.5);
+        d.fillRect(cx - size / 2 + 2, cy - size / 3 + 2, size - 4, size * 0.65 - 4);
       } else if (shape === 1) {
         d.fillTriangle(
           cx,
@@ -490,6 +505,9 @@ export default class EarthquakeScene extends Phaser.Scene {
           this._addScore(SCORE.DEBRIS_HIT);
           this._msg(`DEBRIS HIT! −${dmg} HP`, "#f85149");
           this.cameras.main.shake(180, 0.011);
+          // Visual impact effects
+          this._emitDust(cx, cy, 15);
+          this._flashScreen(120, 0.4);
           // Play hurt animation if available
           try {
             if (
@@ -521,6 +539,9 @@ export default class EarthquakeScene extends Phaser.Scene {
         }
       }
 
+      // Emit dust particles on all debris impacts
+      this._emitDust(cx, cy, 8);
+
       this.tweens.add({
         targets: d,
         alpha: 0,
@@ -534,6 +555,22 @@ export default class EarthquakeScene extends Phaser.Scene {
   // ── Visual effects ────────────────────────────────────────────────────────────
   _applyCracks() {
     this.crackGfx.setVisible(true).clear();
+
+    // Multiple passes for subtle glow effect
+    this.crackGfx.lineStyle(3, 0x3d4450, 0.2);
+    for (let i = 0; i < 8; i++) {
+      let cx = Phaser.Math.Between(20, W - 20);
+      let cy = Phaser.Math.Between(20, H - 20);
+      for (let j = 0; j < 6; j++) {
+        const nx = cx + Phaser.Math.Between(-36, 36);
+        const ny = cy + Phaser.Math.Between(-36, 36);
+        this.crackGfx.lineBetween(cx, cy, nx, ny);
+        cx = nx;
+        cy = ny;
+      }
+    }
+
+    // Main cracks with variable thickness
     this.crackGfx.lineStyle(1, 0x3d4450, 0.7);
     for (let i = 0; i < 8; i++) {
       let cx = Phaser.Math.Between(20, W - 20);
@@ -546,6 +583,50 @@ export default class EarthquakeScene extends Phaser.Scene {
         cy = ny;
       }
     }
+  }
+
+  // ── Particle effects ──────────────────────────────────────────────────────────
+  _initializeParticleEffects() {
+    // Create a small dust particle texture if not already present
+    if (!this.textures.exists("dust_particle")) {
+      const g = this.make.graphics({ add: false });
+      g.fillStyle(0xc8c8c8, 1);
+      g.fillCircle(2, 2, 2);
+      g.generateTexture("dust_particle", 4, 4);
+      g.destroy();
+    }
+
+    // Create dust particle emitter with enhanced visibility
+    this.dustEmitter = this.add.particles(0, 0, "dust_particle", {
+      speed: { min: -100, max: 100 },
+      angle: { min: 200, max: 340 },
+      scale: { start: 1.2, end: 0.2 },
+      alpha: { start: 0.9, end: 0.0 },
+      lifespan: 1000,
+      gravityY: 250,
+      emitZone: {
+        type: "random",
+        source: new Phaser.Geom.Circle(0, 0, 20),
+      },
+    });
+    this.dustEmitter.stop();
+    this.dustEmitter.setDepth(8);
+  }
+
+  _emitDust(x, y, count = 10) {
+    if (this.dustEmitter) {
+      this.dustEmitter.emitParticleAt(x, y, count);
+    }
+  }
+
+  _flashScreen(duration = 100, intensity = 0.6) {
+    this.shakeOverlay.setAlpha(intensity);
+    this.tweens.add({
+      targets: this.shakeOverlay,
+      alpha: 0,
+      duration,
+      ease: "Quad.easeOut",
+    });
   }
 
   // ── Evacuation check ──────────────────────────────────────────────────────────
@@ -708,9 +789,16 @@ export default class EarthquakeScene extends Phaser.Scene {
       this.penaltyAccum = 0;
     }
 
-    // ── Random micro-shakes during strong phase ────────────────────────────
-    if (this.phase === PHASE.SHAKING_STRONG && Math.random() < 0.025) {
-      this.cameras.main.shake(100, 0.005);
+    // ── Random micro-shakes and visual pulses during strong phase ────────────────────────
+    if (this.phase === PHASE.SHAKING_STRONG) {
+      if (Math.random() < 0.025) {
+        this.cameras.main.shake(100, 0.005);
+      }
+      // Occasional intense pulses with flash
+      if (Math.random() < 0.008) {
+        this.cameras.main.shake(150, 0.012);
+        this._flashScreen(80, 0.15);
+      }
     }
 
     // ── Registry sync for React HUD ────────────────────────────────────────
