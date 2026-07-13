@@ -6,11 +6,11 @@
  * and emits a simulation end event for graceful handling.
  */
 
-import Phaser from 'phaser';
+import Phaser from "phaser";
 
 export default class FloodScene extends Phaser.Scene {
   constructor() {
-    super({ key: 'FloodScene' });
+    super({ key: "FloodScene" });
   }
 
   create() {
@@ -18,24 +18,34 @@ export default class FloodScene extends Phaser.Scene {
     const H = this.scale.height;
 
     // Placeholder — redirects back when accidentally loaded
-    this.add.text(W / 2, H / 2 - 20, 'FLOOD MODULE', {
-      fontFamily: 'Bebas Neue, sans-serif',
-      fontSize: '48px',
-      color: '#58a6ff',
-    }).setOrigin(0.5);
+    this.add
+      .text(W / 2, H / 2 - 20, "FLOOD MODULE", {
+        fontFamily: "Bebas Neue, sans-serif",
+        fontSize: "48px",
+        color: "#58a6ff",
+      })
+      .setOrigin(0.5);
 
-    this.add.text(W / 2, H / 2 + 30, 'COMING SOON — Check back in a future release', {
-      fontFamily: 'Share Tech Mono, monospace',
-      fontSize: '13px',
-      color: '#7d8590',
-    }).setOrigin(0.5);
+    this.add
+      .text(W / 2, H / 2 + 30, "COMING SOON — Check back in a future release", {
+        fontFamily: "Share Tech Mono, monospace",
+        fontSize: "13px",
+        color: "#7d8590",
+      })
+      .setOrigin(0.5);
 
     // Emit end immediately so React layer can handle gracefully
     this.time.delayedCall(3000, () => {
-      this.events.emit('simulationEnd', {
-        score: 0, survivorsHelped: 0, survivorsPanicked: 0, survivorsLost: 0,
-        evacuated: false, healthRemaining: 100, debrisHits: 0,
-        decisions: [], durationSeconds: 0,
+      this.events.emit("simulationEnd", {
+        score: 0,
+        survivorsHelped: 0,
+        survivorsPanicked: 0,
+        survivorsLost: 0,
+        evacuated: false,
+        healthRemaining: 100,
+        debrisHits: 0,
+        decisions: [],
+        durationSeconds: 0,
       });
     });
   }

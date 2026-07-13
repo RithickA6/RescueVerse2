@@ -1,5 +1,5 @@
-import Phaser from 'phaser';
-import AnimationManager from './AnimationManager';
+import Phaser from "phaser";
+import AnimationManager from "./AnimationManager";
 
 /**
  * NPCManager.js
@@ -16,29 +16,44 @@ import AnimationManager from './AnimationManager';
  */
 
 const NPC_STATE = {
-  IDLE:      'idle',
-  INJURED:   'injured',
-  PANICKING: 'panicking',
-  HELPED:    'helped',
-  EVACUATED: 'evacuated',
+  IDLE: "idle",
+  INJURED: "injured",
+  PANICKING: "panicking",
+  HELPED: "helped",
+  EVACUATED: "evacuated",
 };
 
 const STATE_CONFIG = {
-  idle:      { color: 0xe6edf3, label: 'CALM',      speed: 0.6,  moveInterval: 1800 },
-  injured:   { color: 0xf85149, label: '! INJURED',  speed: 0,    moveInterval: 99999 },
-  panicking: { color: 0xe3b341, label: '!! PANIC',   speed: 2.8,  moveInterval: 280 },
-  helped:    { color: 0x3fb950, label: '✓ STABLE',   speed: 0.3,  moveInterval: 3000 },
-  evacuated: { color: 0x58a6ff, label: '→ OUT',      speed: 0,    moveInterval: 99999 },
+  idle: { color: 0xe6edf3, label: "CALM", speed: 0.6, moveInterval: 1800 },
+  injured: {
+    color: 0xf85149,
+    label: "! INJURED",
+    speed: 0,
+    moveInterval: 99999,
+  },
+  panicking: {
+    color: 0xe3b341,
+    label: "!! PANIC",
+    speed: 2.8,
+    moveInterval: 280,
+  },
+  helped: {
+    color: 0x3fb950,
+    label: "✓ STABLE",
+    speed: 0.3,
+    moveInterval: 3000,
+  },
+  evacuated: { color: 0x58a6ff, label: "→ OUT", speed: 0, moveInterval: 99999 },
 };
 
-const NPC_PACKS = ['city_men_2', 'city_men_3'];
+const NPC_PACKS = ["city_men_2", "city_men_3"];
 const NPC_SCALE = 0.82;
 const NPC_ORIGIN_Y = 0.95;
 
 const SCORE_EVENTS = {
-  HELP_INJURED:   { action: 'helped_npc',   pts:  150 },
-  CALM_PANICKING: { action: 'calmed_npc',   pts:  100 },
-  IGNORE_PENALTY: { action: 'ignored_npc',  pts:  -80 },
+  HELP_INJURED: { action: "helped_npc", pts: 150 },
+  CALM_PANICKING: { action: "calmed_npc", pts: 100 },
+  IGNORE_PENALTY: { action: "ignored_npc", pts: -80 },
 };
 
 export default class NPCManager {
@@ -52,26 +67,30 @@ export default class NPCManager {
    * @param {number} cfg.exitY       - Exit zone centre Y
    */
   constructor(scene, cfg = {}) {
-    this.scene     = scene;
-    this.cfg       = cfg;
-    this.npcs      = [];
-    this.exitX     = cfg.exitX || 750;
-    this.exitY     = cfg.exitY || 570;
-    this.animMgr   = new AnimationManager(scene);
+    this.scene = scene;
+    this.cfg = cfg;
+    this.npcs = [];
+    this.exitX = cfg.exitX || 750;
+    this.exitY = cfg.exitY || 570;
+    this.animMgr = new AnimationManager(scene);
 
-    if (!this.scene.anims.exists('npc_idle')) {
+    if (!this.scene.anims.exists("npc_idle")) {
       this.animMgr.registerNPCAnimations();
     }
   }
 
   // ── Spawn ───────────────────────────────────────────────────────────────────
   spawn(bounds = { x: 40, y: 40, w: 720, h: 520 }) {
-    const { count = 8, injured: injCount = 2, panicking: panCount = 2 } = this.cfg;
+    const {
+      count = 8,
+      injured: injCount = 2,
+      panicking: panCount = 2,
+    } = this.cfg;
 
     const types = [];
-    for (let i = 0; i < injCount;  i++) types.push(NPC_STATE.INJURED);
-    for (let i = 0; i < panCount;  i++) types.push(NPC_STATE.PANICKING);
-    while (types.length < count)        types.push(NPC_STATE.IDLE);
+    for (let i = 0; i < injCount; i++) types.push(NPC_STATE.INJURED);
+    for (let i = 0; i < panCount; i++) types.push(NPC_STATE.PANICKING);
+    while (types.length < count) types.push(NPC_STATE.IDLE);
 
     // Shuffle
     for (let i = types.length - 1; i > 0; i--) {
@@ -98,7 +117,7 @@ export default class NPCManager {
   }
 
   _ensureFallbackTexture() {
-    const fallbackKey = 'npc_fallback';
+    const fallbackKey = "npc_fallback";
     if (!this.scene.textures.exists(fallbackKey)) {
       const g = this.scene.make.graphics({ add: false });
       g.fillStyle(0xe6edf3, 1);
@@ -115,19 +134,22 @@ export default class NPCManager {
     if (!npc.sprite) return;
     let action;
     if (npc.state === NPC_STATE.INJURED) {
-      action = 'npc_hurt';
+      action = "npc_hurt";
     } else if (npc.state === NPC_STATE.EVACUATED) {
-      action = 'npc_idle';
+      action = "npc_idle";
     } else {
       const moving = npc.dx !== 0 || npc.dy !== 0;
       if (moving) {
-        if (npc.state === NPC_STATE.PANICKING && this.scene.anims.exists('npc_run')) {
-          action = 'npc_run';
+        if (
+          npc.state === NPC_STATE.PANICKING &&
+          this.scene.anims.exists("npc_run")
+        ) {
+          action = "npc_run";
         } else {
-          action = 'npc_walk';
+          action = "npc_walk";
         }
       } else {
-        action = 'npc_idle';
+        action = "npc_idle";
       }
     }
 
@@ -146,16 +168,20 @@ export default class NPCManager {
       ? textureKey
       : this._ensureFallbackTexture();
 
-    const sprite = scene.add.sprite(x, y, finalTexture)
+    const sprite = scene.add
+      .sprite(x, y, finalTexture)
       .setOrigin(0.5, NPC_ORIGIN_Y)
       .setScale(NPC_SCALE)
       .setDepth(9);
 
-    const label = scene.add.text(x, y - 22, '', {
-      fontFamily: 'Share Tech Mono, monospace',
-      fontSize:   '9px',
-      align:      'center',
-    }).setOrigin(0.5).setDepth(11);
+    const label = scene.add
+      .text(x, y - 22, "", {
+        fontFamily: "Share Tech Mono, monospace",
+        fontSize: "9px",
+        align: "center",
+      })
+      .setOrigin(0.5)
+      .setDepth(11);
 
     const npc = {
       id,
@@ -167,8 +193,10 @@ export default class NPCManager {
       label,
       currentAnim: null,
       moveTimer: Math.random() * 1000,
-      dx: 0, dy: 0,
-      targetX: x, targetY: y,
+      dx: 0,
+      dy: 0,
+      targetX: x,
+      targetY: y,
     };
 
     this._render(npc);
@@ -176,8 +204,7 @@ export default class NPCManager {
   }
 
   _positionNpcLabel(npc) {
-    const spriteTop = npc.sprite.y - Math.round(npc.sprite.displayHeight * npc.sprite.originY);
-    return spriteTop - 12;
+    return npc.sprite.y - (npc.sprite.displayHeight * 0.52);
   }
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -192,10 +219,15 @@ export default class NPCManager {
     npc.label.setPosition(npc.x, labelY);
     npc.label.setText(cfg.label);
     npc.label.setColor(
-      npc.state === NPC_STATE.INJURED   ? '#f85149' :
-      npc.state === NPC_STATE.PANICKING ? '#e3b341' :
-      npc.state === NPC_STATE.HELPED    ? '#3fb950' :
-      npc.state === NPC_STATE.EVACUATED ? '#58a6ff' : '#484f58'
+      npc.state === NPC_STATE.INJURED
+        ? "#f85149"
+        : npc.state === NPC_STATE.PANICKING
+          ? "#e3b341"
+          : npc.state === NPC_STATE.HELPED
+            ? "#3fb950"
+            : npc.state === NPC_STATE.EVACUATED
+              ? "#58a6ff"
+              : "#484f58",
     );
   }
 
@@ -204,7 +236,7 @@ export default class NPCManager {
     const W = this.scene.scale.width;
     const H = this.scene.scale.height;
 
-    this.npcs.forEach(npc => {
+    this.npcs.forEach((npc) => {
       if (npc.state === NPC_STATE.EVACUATED) return;
 
       const cfg = STATE_CONFIG[npc.state];
@@ -214,18 +246,34 @@ export default class NPCManager {
       if (npc.moveTimer <= 0) {
         npc.moveTimer = cfg.moveInterval + Math.random() * 400;
 
-        if (phase === 'evacuation' && (npc.state === NPC_STATE.IDLE || npc.state === NPC_STATE.HELPED)) {
+        if (
+          phase === "evacuation" &&
+          (npc.state === NPC_STATE.IDLE || npc.state === NPC_STATE.HELPED)
+        ) {
           // Navigate toward exit
           npc.targetX = this.exitX + (Math.random() - 0.5) * 20;
           npc.targetY = this.exitY + (Math.random() - 0.5) * 20;
         } else {
           // Random wander
-          npc.targetX = Phaser.Math.Clamp(npc.x + (Math.random() - 0.5) * 120, 36, W - 36);
-          npc.targetY = Phaser.Math.Clamp(npc.y + (Math.random() - 0.5) * 120, 36, H - 36);
+          npc.targetX = Phaser.Math.Clamp(
+            npc.x + (Math.random() - 0.5) * 120,
+            36,
+            W - 36,
+          );
+          npc.targetY = Phaser.Math.Clamp(
+            npc.y + (Math.random() - 0.5) * 120,
+            36,
+            H - 36,
+          );
         }
 
         // Compute direction
-        const dist = Phaser.Math.Distance.Between(npc.x, npc.y, npc.targetX, npc.targetY);
+        const dist = Phaser.Math.Distance.Between(
+          npc.x,
+          npc.y,
+          npc.targetX,
+          npc.targetY,
+        );
         if (dist > 2) {
           npc.dx = ((npc.targetX - npc.x) / dist) * cfg.speed;
           npc.dy = ((npc.targetY - npc.y) / dist) * cfg.speed;
@@ -247,7 +295,7 @@ export default class NPCManager {
 
       // ── Evacuate once in exit zone ────────────────────────────────────────
       if (
-        phase === 'evacuation' &&
+        phase === "evacuation" &&
         exitZone &&
         Phaser.Geom.Rectangle.Contains(exitZone, npc.x, npc.y) &&
         npc.state !== NPC_STATE.EVACUATED
@@ -273,10 +321,13 @@ export default class NPCManager {
    */
   tryInteract(playerX, playerY, range = 50) {
     const near = this.npcs
-      .filter(n => n.state === NPC_STATE.INJURED || n.state === NPC_STATE.PANICKING)
-      .sort((a, b) =>
-        Phaser.Math.Distance.Between(playerX, playerY, a.x, a.y) -
-        Phaser.Math.Distance.Between(playerX, playerY, b.x, b.y)
+      .filter(
+        (n) => n.state === NPC_STATE.INJURED || n.state === NPC_STATE.PANICKING,
+      )
+      .sort(
+        (a, b) =>
+          Phaser.Math.Distance.Between(playerX, playerY, a.x, a.y) -
+          Phaser.Math.Distance.Between(playerX, playerY, b.x, b.y),
       )[0];
 
     if (!near) return null;
@@ -305,18 +356,26 @@ export default class NPCManager {
    */
   collectIgnorePenalties() {
     return this.npcs
-      .filter(n => n.state === NPC_STATE.INJURED)
-      .map(n => ({ ...SCORE_EVENTS.IGNORE_PENALTY, npcId: n.id }));
+      .filter((n) => n.state === NPC_STATE.INJURED)
+      .map((n) => ({ ...SCORE_EVENTS.IGNORE_PENALTY, npcId: n.id }));
   }
 
   // ── Stat getters ─────────────────────────────────────────────────────────────
-  get survivorsHelped()   { return this.npcs.filter(n => n.state === NPC_STATE.HELPED || n.state === NPC_STATE.EVACUATED).length; }
-  get survivorsPanicked() { return this.npcs.filter(n => n.state === NPC_STATE.PANICKING).length; }
-  get survivorsLost()     { return this.npcs.filter(n => n.state === NPC_STATE.INJURED).length; }
+  get survivorsHelped() {
+    return this.npcs.filter(
+      (n) => n.state === NPC_STATE.HELPED || n.state === NPC_STATE.EVACUATED,
+    ).length;
+  }
+  get survivorsPanicked() {
+    return this.npcs.filter((n) => n.state === NPC_STATE.PANICKING).length;
+  }
+  get survivorsLost() {
+    return this.npcs.filter((n) => n.state === NPC_STATE.INJURED).length;
+  }
 
   // ── Cleanup ─────────────────────────────────────────────────────────────────
   destroy() {
-    this.npcs.forEach(n => {
+    this.npcs.forEach((n) => {
       n.sprite?.destroy();
       n.label?.destroy();
     });
