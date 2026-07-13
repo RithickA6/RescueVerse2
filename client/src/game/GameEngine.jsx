@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import Phaser from 'phaser';
 import PreloadScene from './scenes/PreloadScene';
 import EarthquakeScene from './scenes/EarthquakeScene';
+import FloodScene from './scenes/FloodScene';
 import { getSceneConfig, getSceneKey } from './SceneConfig';
 
 const PHASE_LABELS = {
@@ -45,7 +46,7 @@ export default function GameEngine({ scenario, onSimulationEnd }) {
       height:          560,
       parent:          mountRef.current,
       backgroundColor: '#1a1f2e',
-      scene:           [PreloadScene, EarthquakeScene],
+      scene:           [PreloadScene, EarthquakeScene, FloodScene],
     });
     gameRef.current = game;
 
@@ -55,9 +56,9 @@ export default function GameEngine({ scenario, onSimulationEnd }) {
       game.registry.set('scenarioId',   scenario?._id);
       game.registry.set('scenarioType', scenario?.type || 'earthquake');
 
-      const attach = () => {
+      const attachSceneListeners = () => {
         const scene = game.scene.getScene(targetScene);
-        if (!scene || !scene.sys.isActive()) { setTimeout(attach, 300); return; }
+        if (!scene || !scene.sys.isActive()) { setTimeout(attachSceneListeners, 300); return; }
 
         scene.events.on('phaseChange',   p => setPhase(p));
         scene.events.on('scoreUpdate',   s => setScore(s));
@@ -79,8 +80,8 @@ export default function GameEngine({ scenario, onSimulationEnd }) {
         }, 400);
       };
 
-      game.scene.getScene('PreloadScene')?.events.on('shutdown', () => setTimeout(attach, 200));
-      setTimeout(attach, 2000);
+      game.scene.getScene('PreloadScene')?.events.on('shutdown', () => setTimeout(attachSceneListeners, 200));
+      setTimeout(attachSceneListeners, 200);
     });
 
     return () => { gameRef.current?.destroy(true); gameRef.current = null; };

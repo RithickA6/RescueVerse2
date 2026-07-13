@@ -4,6 +4,9 @@
  * Passed into EarthquakeScene via Phaser registry before scene start.
  */
 
+export const DEFAULT_DIFFICULTY = 'beginner';
+export const DEFAULT_SCENE_KEY = 'EarthquakeScene';
+
 export const DIFFICULTY_CONFIG = {
   beginner: {
     npcCount:            6,
@@ -44,20 +47,20 @@ export const DIFFICULTY_CONFIG = {
 };
 
 export function getSceneConfig(difficulty) {
-  return DIFFICULTY_CONFIG[difficulty] || DIFFICULTY_CONFIG.beginner;
+  return DIFFICULTY_CONFIG[difficulty] || DIFFICULTY_CONFIG[DEFAULT_DIFFICULTY];
 }
 
 /**
  * Maps scenario.type → Phaser scene key.
- * Add entries here as new disaster types are built.
+ * Add entries here as new disaster types as they are built.
  */
 export const SCENE_KEY_MAP = {
   earthquake: 'EarthquakeScene',
-  flood:      'FloodScene',      // not yet implemented — will fallback gracefully
+  flood:      'FloodScene',
   fire:       'FireScene',
   cyclone:    'CycloneScene',
 };
 
 export function getSceneKey(type) {
-  return SCENE_KEY_MAP[type] || 'EarthquakeScene';
+  return SCENE_KEY_MAP[type] || DEFAULT_SCENE_KEY;
 }

@@ -1,3 +1,5 @@
+import Phaser from 'phaser';
+
 /**
  * NPCManager.js
  * Reusable NPC behaviour engine for Phaser disaster scenes.
@@ -208,7 +210,6 @@ export default class NPCManager {
    * @returns {{ action: string, pts: number, label: string } | null}
    */
   tryInteract(playerX, playerY, range = 50) {
-    const Phaser = this.scene.sys.game.device ? window.Phaser : require('phaser');
     const near = this.npcs
       .filter(n => n.state === NPC_STATE.INJURED || n.state === NPC_STATE.PANICKING)
       .sort((a, b) =>
