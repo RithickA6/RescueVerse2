@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { signInWithPopup, signOut } from 'firebase/auth';
+import { auth, googleProvider } from '../firebase';
 import api from '../services/api';
 
 const AuthContext = createContext(null);
@@ -41,11 +43,26 @@ export function AuthProvider({ children }) {
   const logout = () => {
     localStorage.removeItem('token');
     delete api.defaults.headers.common['Authorization'];
+    signOut(auth).catch(() => {});
     setUser(null);
   };
 
+  // Firebase popup → verify with backend → store same JWT as email/password login.
+  // Without a backend token, dashboard API calls 401 and the axios interceptor
+  // hard-redirects to /login (the post-Google bounce bug).
+  const loginWithGoogle = async () => {
+    const { user: fbUser } = await signInWithPopup(auth, googleProvider);
+    const idToken = await fbUser.getIdToken();
+    const res = await api.post('/auth/google', { idToken });
+    const { token, user } = res.data;
+    localStorage.setItem('token', token);
+    api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    setUser(user);
+    return user;
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, setUser }}>
+    <AuthContext.Provider value={{ user, loading, login, register, loginWithGoogle, logout, setUser }}>
       {children}
     </AuthContext.Provider>
   );
