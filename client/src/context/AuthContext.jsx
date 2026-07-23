@@ -51,8 +51,9 @@ export function AuthProvider({ children }) {
   // Without a backend token, dashboard API calls 401 and the axios interceptor
   // hard-redirects to /login (the post-Google bounce bug).
   const loginWithGoogle = async () => {
-    const { user: fbUser } = await signInWithPopup(auth, googleProvider);
-    const idToken = await fbUser.getIdToken();
+    const result = await signInWithPopup(auth, googleProvider);
+    const idToken = await result.user.getIdToken(true);
+    if (!idToken) throw new Error('Firebase did not return an ID token');
     const res = await api.post('/auth/google', { idToken });
     const { token, user } = res.data;
     localStorage.setItem('token', token);

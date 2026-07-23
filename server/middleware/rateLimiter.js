@@ -15,11 +15,11 @@ try {
   rateLimit = null;
 }
 
-// Auth rate limiter — 10 requests per 15 minutes per IP
+// Auth rate limiter — looser in local/dev so Google sign-in retries aren't blocked
 const authLimiter = rateLimit
   ? rateLimit({
       windowMs: 15 * 60 * 1000,
-      max: 10,
+      max: process.env.NODE_ENV === 'production' ? 20 : 200,
       standardHeaders: true,
       legacyHeaders: false,
       message: { message: 'Too many login attempts. Please wait 15 minutes before trying again.' },

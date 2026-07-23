@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
+const { decodeProtectedHeader, importX509, jwtVerify } = require('jose');
 const User = require('../models/User');
 
 const signToken = (id) =>
@@ -36,45 +37,57 @@ async function uniqueUsername(base) {
 }
 
 const FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID || 'game-96c46';
+const FIREBASE_CERTS_URL =
+  'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com';
+
 let cachedCerts = null;
 let cachedCertsAt = 0;
 
-async function getGoogleCerts() {
+async function getFirebaseCerts() {
   const now = Date.now();
   if (cachedCerts && now - cachedCertsAt < 60 * 60 * 1000) return cachedCerts;
-  const res = await fetch(
-    'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com'
-  );
-  if (!res.ok) throw new Error('Failed to fetch Google signing certificates');
+  const res = await fetch(FIREBASE_CERTS_URL);
+  if (!res.ok) throw new Error('Failed to fetch Firebase signing certificates');
   cachedCerts = await res.json();
   cachedCertsAt = now;
   return cachedCerts;
 }
 
-// Verify Firebase ID token with Google public keys (works even when the
-// web API key is restricted to browser referrers).
+// Verify Firebase ID token by kid → X.509 cert (avoids jose JWKS multi-key crashes).
 async function verifyFirebaseIdToken(idToken) {
-  const certs = await getGoogleCerts();
-  const decoded = jwt.decode(idToken, { complete: true });
-  if (!decoded?.header?.kid) {
-    const err = new Error('Invalid Firebase token');
+  if (typeof idToken !== 'string' || idToken.split('.').length !== 3) {
+    const err = new Error('Invalid Firebase token format');
     err.status = 401;
     throw err;
   }
-  const cert = certs[decoded.header.kid];
-  if (!cert) {
-    cachedCerts = null;
-    const err = new Error('Firebase token signed with unknown key');
-    err.status = 401;
-    throw err;
-  }
+
   try {
-    return jwt.verify(idToken, cert, {
-      algorithms: ['RS256'],
+    const header = decodeProtectedHeader(idToken);
+    if (!header.kid) {
+      const err = new Error('Firebase token missing key id');
+      err.status = 401;
+      throw err;
+    }
+
+    const certs = await getFirebaseCerts();
+    const x509 = certs[header.kid];
+    if (!x509) {
+      cachedCerts = null;
+      const err = new Error('Firebase token signed with unknown key');
+      err.status = 401;
+      throw err;
+    }
+
+    const key = await importX509(x509, 'RS256');
+    const { payload } = await jwtVerify(idToken, key, {
       audience: FIREBASE_PROJECT_ID,
       issuer: `https://securetoken.google.com/${FIREBASE_PROJECT_ID}`,
+      algorithms: ['RS256'],
     });
+    return payload;
   } catch (e) {
+    if (e.status) throw e;
+    console.error('[auth/google] token verify failed:', e.code || e.name, e.message);
     const err = new Error(e.message || 'Invalid Firebase token');
     err.status = 401;
     throw err;
@@ -127,10 +140,17 @@ exports.login = async (req, res) => {
 // POST /api/auth/google — verify Firebase ID token, upsert user, return JWT
 exports.googleLogin = async (req, res) => {
   try {
-    const { idToken } = req.body;
+    const raw = req.body?.idToken ?? req.body?.token ?? '';
+    const idToken = typeof raw === 'string' ? raw.trim() : '';
     if (!idToken) {
       return res.status(400).json({ message: 'Firebase idToken is required' });
     }
+    console.log('[auth/google] received token meta', {
+      type: typeof raw,
+      length: idToken.length,
+      parts: idToken.split('.').length,
+      prefix: idToken.slice(0, 16),
+    });
 
     const payload = await verifyFirebaseIdToken(idToken);
     if (!payload.email) {
@@ -139,7 +159,7 @@ exports.googleLogin = async (req, res) => {
 
     const email = String(payload.email).toLowerCase();
     const displayName = payload.name || email.split('@')[0];
-    const photoUrl = payload.picture || 'default';
+    const photoUrl = typeof payload.picture === 'string' && payload.picture ? payload.picture : 'default';
 
     let user = await User.findOne({ email });
 
@@ -152,13 +172,20 @@ exports.googleLogin = async (req, res) => {
         avatar: photoUrl,
       });
     } else if (photoUrl !== 'default' && user.avatar === 'default') {
+      // updateOne avoids password required-validation (password is select:false)
+      await User.updateOne({ _id: user._id }, { $set: { avatar: photoUrl } });
       user.avatar = photoUrl;
-      await user.save();
     }
 
     createSendToken(user, 200, res);
   } catch (error) {
     console.error('[auth/google]', error.message);
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({ message: error.message });
+    }
+    if (error.code === 11000) {
+      return res.status(409).json({ message: 'An account with this email already exists' });
+    }
     const status = error.status || 500;
     res.status(status).json({ message: error.message || 'Google sign-in failed' });
   }

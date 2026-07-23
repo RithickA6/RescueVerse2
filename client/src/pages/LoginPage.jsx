@@ -26,9 +26,13 @@ export default function LoginPage() {
       await loginWithGoogle();
       navigate('/dashboard');
     } catch (err) {
-      if (err.code !== 'auth/popup-closed-by-user') {
-        setError(err.response?.data?.message || err.message || 'Google sign-in failed.');
-      }
+      if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') return;
+      const msg =
+        err.response?.data?.message ||
+        (err.code ? `Firebase: ${err.code}` : null) ||
+        err.message ||
+        'Google sign-in failed.';
+      setError(msg);
     }
   };
 
