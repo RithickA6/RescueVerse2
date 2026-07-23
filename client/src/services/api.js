@@ -12,13 +12,20 @@ api.interceptors.request.use(config => {
   return config;
 });
 
-// Global error handling
+// Global error handling — only force-logout on expired/invalid session tokens,
+// not on failed login/register/google attempts (those are handled by the forms).
 api.interceptors.response.use(
   res => res,
   err => {
-    if (err.response?.status === 401) {
+    const status = err.response?.status;
+    const url = err.config?.url || '';
+    const isAuthAttempt = /\/auth\/(login|register|google)/.test(url);
+    if (status === 401 && !isAuthAttempt) {
       localStorage.removeItem('token');
-      window.location.href = '/login';
+      delete api.defaults.headers.common['Authorization'];
+      if (!window.location.pathname.startsWith('/login')) {
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(err);
   }

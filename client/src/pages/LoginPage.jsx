@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export default function LoginPage() {
-  const { login } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
   const [form, setForm] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
@@ -18,6 +18,22 @@ export default function LoginPage() {
     } catch (err) {
       setError(err.response?.data?.message || 'Invalid email or password.');
     } finally { setLoading(false); }
+  };
+
+  const handleGoogle = async () => {
+    setError('');
+    try {
+      await loginWithGoogle();
+      navigate('/dashboard');
+    } catch (err) {
+      if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') return;
+      const msg =
+        err.response?.data?.message ||
+        (err.code ? `Firebase: ${err.code}` : null) ||
+        err.message ||
+        'Google sign-in failed.';
+      setError(msg);
+    }
   };
 
   return (
@@ -51,6 +67,16 @@ export default function LoginPage() {
             {loading ? 'Signing in…' : 'Sign In'}
           </button>
         </form>
+
+        <div className="rv-auth-divider" style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '18px 0', color: '#888', fontSize: '0.8rem' }}>
+          <span style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.15)' }} /> OR <span style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.15)' }} />
+        </div>
+
+        <button type="button" onClick={handleGoogle}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, width: '100%', padding: '12px', borderRadius: 14, border: '1px solid rgba(255,255,255,0.2)', background: '#fff', color: '#333', fontSize: '0.95rem', fontWeight: 600, cursor: 'pointer' }}>
+          <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="" width="18" height="18" />
+          Continue with Google
+        </button>
 
         <p className="rv-auth-footer" style={{ marginTop: 20 }}>
           Don't have an account? <Link to="/register">Create one</Link>

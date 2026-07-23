@@ -18,7 +18,17 @@ const app = express();
 connectDB();
 
 // Middleware
-app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173', credentials: true }));
+const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+app.use(cors({
+  origin: (origin, cb) => {
+    // Allow non-browser tools (no Origin) and local Vite ports during development
+    if (!origin || origin === clientUrl || /^http:\/\/localhost:\d+$/.test(origin)) {
+      return cb(null, true);
+    }
+    return cb(null, false);
+  },
+  credentials: true,
+}));
 app.use(express.json({ limit: '1mb' }));
 app.use(apiLimiter);
 
